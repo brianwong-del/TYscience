@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>川御打卡系統</title>
+
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="川御打卡">
+    
+    <!-- 放你完美的 Icon 網址 -->
+    <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/brianwong-del/TYscience/main/川御打卡.png">
+    <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/brianwong-del/TYscience/main/川御打卡.png">
+
+    <style>
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; text-align: center; background-color: #f4f6f9; margin: 0; padding: 10px; }
+        .container { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); max-width: 450px; margin: 0 auto; }
+        .login-box { background: #eef2f3; padding: 15px; border-radius: 10px; margin-bottom: 15px; }
+        input[type="text"], input[type="password"], input[type="date"], input[type="time"], input[type="month"] { 
+            width: 100%; padding: 12px; margin: 5px 0 10px 0; font-size: 18px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; 
+        }
+        .checkbox-container { display: flex; align-items: center; font-size: 16px; color: #555; }
+        .checkbox-container input { width: 20px; height: 20px; margin-right: 10px; }
+        .tab-nav { display: flex; justify-content: space-between; margin-bottom: 15px; border-bottom: 2px solid #ddd; padding-bottom: 10px; }
+        .tab-btn { flex: 1; margin: 0 3px; padding: 12px 5px; font-size: 16px; font-weight: bold; border-radius: 8px; border: none; background: #eee; color: #555; cursor: pointer; }
+        .tab-btn.active { background: #4CAF50; color: white; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .btn-main { width: 100%; padding: 15px; font-size: 22px; font-weight: bold; color: white; border: none; border-radius: 10px; cursor: pointer; margin-top: 10px; }
+        .btn-green { background-color: #4CAF50; }
+        .btn-blue { background-color: #007bff; }
+        .btn-orange { background-color: #ff9800; }
+        .btn-main:disabled { opacity: 0.6; cursor: not-allowed; }
+        .msg { margin-top: 15px; font-size: 18px; font-weight: bold; }
+        .success { color: #2e7d32; }
+        .error { color: #d32f2f; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 18px; }
+        th, td { border: 1px solid #ddd; padding: 10px 5px; text-align: center; }
+        th { background-color: #f2f2f2; color: #333; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        .form-group { text-align: left; font-size: 16px; font-weight: bold; color: #444; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- 頂部：共用帳號密碼 -->
+        <div class="login-box">
+            <input type="text" id="empId" placeholder="輸入員工 ID">
+            <input type="password" id="empPwd" placeholder="輸入密碼">
+            <div class="checkbox-container">
+                <input type="checkbox" id="rememberMe" checked>
+                <label for="rememberMe">記住帳號密碼</label>
+            </div>
+        </div>
+
+        <div class="tab-nav">
+            <button class="tab-btn active" onclick="switchTab('tab-checkin', this)">📍 打卡</button>
+            <button class="tab-btn" onclick="switchTab('tab-correction', this)">📝 補卡</button>
+            <button class="tab-btn" onclick="switchTab('tab-records', this)">📅 紀錄</button>
+        </div>
+
+        <!-- 現場打卡 -->
+        <div id="tab-checkin" class="tab-content active">
+            <button id="btnCheckIn" class="btn-main btn-green" onclick="getLocation()">立即打卡</button>
+            <p id="msg-checkin" class="msg"></p>
+        </div>
+
+        <!-- 忘記補卡 -->
+        <div id="tab-correction" class="tab-content">
+            <div class="form-group"><label>日期：</label><input type="date" id="corrDate"></div>
+            <div class="form-group"><label>時間：</label><input type="time" id="corrTime"></div>
+            <div class="form-group"><label>理由：</label><input type="text" id="corrReason" placeholder="例如：忘記帶手機"></div>
+            <button id="btnCorrection" class="btn-main btn-blue" onclick="submitCorrection()">送出補卡</button>
+            <p id="msg-correction" class="msg"></p>
+        </div>
+
+        <!-- 查詢紀錄 -->
+        <div id="tab-records" class="tab-content">
+            <div class="form-group"><label>選擇月份：</label><input type="month" id="recordMonth"></div>
+            <button id="btnRecords" class="btn-main btn-orange" onclick="fetchRecords()">查詢紀錄</button>
+            <p id="msg-records" class="msg"></p>
+            <table id="recordTable" style="display:none;">
+                <thead><tr><th>日期</th><th>最早(上班)</th><th>最遲(下班)</th></tr></thead>
+                <tbody id="recordBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // 🚨 這裡填入你 Google Apps Script 部署出來的 /exec 網址 🚨
+        const GAS_API_URL = "https://script.google.com/macros/s/AKfycbx0Ggk4PjZLQsfDgY9HvXvYCj36sBM0-6JejHrnu9ONu6kcsBzKF2KK_9rExHHc0Mkgug/exec";
+
+        window.onload = function() {
+            if (localStorage.getItem("empId")) {
+                document.getElementById("empId").value = localStorage.getItem("empId");
+                document.getElementById("empPwd").value = localStorage.getItem("empPwd");
+            }
+            let today = new Date();
+            document.getElementById("corrDate").value = today.toISOString().split('T')[0];
+            let yyyy_mm = today.getFullYear() + "-" + ("0" + (today.getMonth() + 1)).slice(-2);
+            document.getElementById("recordMonth").value = yyyy_mm;
+        };
+
+        function switchTab(tabId, btnElement) {
+            let contents = document.getElementsByClassName("tab-content");
+            for (let i = 0; i < contents.length; i++) contents[i].classList.remove("active");
+            let btns = document.getElementsByClassName("tab-btn");
+            for (let i = 0; i < btns.length; i++) btns[i].classList.remove("active");
+            document.getElementById(tabId).classList.add("active");
+            btnElement.classList.add("active");
+        }
+
+        function getCredentials() {
+            let id = document.getElementById("empId").value;
+            let pwd = document.getElementById("empPwd").value;
+            if (!id || !pwd) return null;
+            if (document.getElementById("rememberMe").checked) {
+                localStorage.setItem("empId", id);
+                localStorage.setItem("empPwd", pwd);
+            }
+            return {id: id, pwd: pwd};
+        }
+
+        // 共用的 API 呼叫函數 (取代原本的 google.script.run)
+        function callGAS(payload, successCallback, errorCallback) {
+            // 使用 text/plain 避免 CORS 預檢錯誤
+            fetch(GAS_API_URL, {
+                method: "POST",
+                headers: { "Content-Type": "text/plain;charset=utf-8" }, 
+                body: JSON.stringify(payload)
+            })
+            .then(res => res.json())
+            .then(data => successCallback(data))
+            .catch(err => {
+                console.error("API Error:", err);
+                errorCallback(err);
+            });
+        }
+
+        function getLocation() {
+            let cred = getCredentials();
+            let msg = document.getElementById("msg-checkin");
+            let btn = document.getElementById("btnCheckIn");
+            if (!cred) { msg.className = "msg error"; msg.innerText = "❌ 請先輸入帳號與密碼！"; return; }
+            
+            btn.disabled = true; btn.innerText = "定位中..."; msg.innerText = "⏳ 正在取得位置..."; msg.className = "msg";
+
+            navigator.geolocation.getCurrentPosition(
+                function(position) {
+                    msg.innerText = "⏳ 驗證中...";
+                    let payload = { action: "checkIn", id: cred.id, pwd: cred.pwd, lat: position.coords.latitude, lng: position.coords.longitude };
+                    
+                    callGAS(payload, 
+                        function(res) {
+                            msg.innerText = res.msg;
+                            msg.className = res.status === 'success' ? 'msg success' : 'msg error';
+                            btn.disabled = false; btn.innerText = "立即打卡";
+                        }, 
+                        function(err) {
+                            msg.className = "msg error"; msg.innerText = "❌ 系統錯誤，請聯絡管理員。";
+                            btn.disabled = false; btn.innerText = "立即打卡";
+                        }
+                    );
+                },
+                function(error) {
+                    msg.className = "msg error"; msg.innerText = "❌ 無法取得位置，請確認允許 GPS。";
+                    btn.disabled = false; btn.innerText = "立即打卡";
+                }, { enableHighAccuracy: true, timeout: 15000 }
+            );
+        }
+
+        function submitCorrection() {
+            let cred = getCredentials();
+            let msg = document.getElementById("msg-correction");
+            let btn = document.getElementById("btnCorrection");
+            let date = document.getElementById("corrDate").value;
+            let time = document.getElementById("corrTime").value;
+            let reason = document.getElementById("corrReason").value || "無";
+
+            if (!cred) { msg.className = "msg error"; msg.innerText = "❌ 請先輸入帳號密碼！"; return; }
+            if (!date || !time) { msg.className = "msg error"; msg.innerText = "❌ 請選擇日期與時間！"; return; }
+
+            btn.disabled = true; btn.innerText = "傳送中..."; msg.innerText = "⏳ 處理中..."; msg.className = "msg";
+
+            let payload = { action: "correction", id: cred.id, pwd: cred.pwd, date: date, time: time, reason: reason };
+            
+            callGAS(payload, 
+                function(res) {
+                    msg.innerText = res.msg;
+                    msg.className = res.status === 'success' ? 'msg success' : 'msg error';
+                    btn.disabled = false; btn.innerText = "送出補卡";
+                }, 
+                function(err) {
+                    msg.className = "msg error"; msg.innerText = "❌ 系統錯誤。";
+                    btn.disabled = false; btn.innerText = "送出補卡";
+                }
+            );
+        }
+
+        function fetchRecords() {
+            let cred = getCredentials();
+            let msg = document.getElementById("msg-records");
+            let btn = document.getElementById("btnRecords");
+            let month = document.getElementById("recordMonth").value;
+            let table = document.getElementById("recordTable");
+            let tbody = document.getElementById("recordBody");
+
+            if (!cred) { msg.className = "msg error"; msg.innerText = "❌ 請先輸入帳號密碼！"; return; }
+            if (!month) { msg.className = "msg error"; msg.innerText = "❌ 請選擇月份！"; return; }
+
+            btn.disabled = true; btn.innerText = "查詢中..."; msg.innerText = "";
+            table.style.display = "none"; tbody.innerHTML = "";
+
+            let payload = { action: "getRecords", id: cred.id, pwd: cred.pwd, yearMonth: month };
+
+            callGAS(payload, 
+                function(res) {
+                    btn.disabled = false; btn.innerText = "查詢紀錄";
+                    if (res.status === "error") { msg.className = "msg error"; msg.innerText = res.msg; return; }
+                    if (res.data.length === 0) { msg.className = "msg error"; msg.innerText = "⚠️ 這個月無紀錄！"; return; }
+
+                    res.data.forEach(function(row) {
+                        let tr = document.createElement("tr");
+                        tr.innerHTML = `<td>${row.date}</td><td>${row.first}</td><td>${row.last}</td>`;
+                        tbody.appendChild(tr);
+                    });
+                    table.style.display = "table";
+                },
+                function(err) {
+                    btn.disabled = false; btn.innerText = "查詢紀錄";
+                    msg.className = "msg error"; msg.innerText = "❌ 系統錯誤。";
+                }
+            );
+        }
+    </script>
+</body>
+</html>

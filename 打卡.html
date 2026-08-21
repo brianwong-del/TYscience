@@ -102,6 +102,16 @@
             let yyyy_mm = today.getFullYear() + "-" + ("0" + (today.getMonth() + 1)).slice(-2);
             document.getElementById("recordMonth").value = yyyy_mm;
         };
+        // 取得或生成手機的專屬設備碼
+        function getDeviceId() {
+            let deviceId = localStorage.getItem("deviceId");
+            if (!deviceId) {
+                // 如果是第一次使用，隨機生成一組代碼並永久存在手機裡
+                deviceId = "DEV_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
+                localStorage.setItem("deviceId", deviceId);
+            }
+            return deviceId;
+        }
 
         function switchTab(tabId, btnElement) {
             let contents = document.getElementsByClassName("tab-content");

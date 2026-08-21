@@ -81,12 +81,16 @@
             <div class="form-group"><label>選擇月份：</label><input type="month" id="recordMonth"></div>
             <button id="btnRecords" class="btn-main btn-orange" onclick="fetchRecords()">查詢紀錄</button>
             <p id="msg-records" class="msg"></p>
-            <table id="recordTable" style="display:none;">
-                <thead><tr><th>日期</th><th>最早(上班)</th><th>最遲(下班)</th></tr></thead>
+            
+            <!-- 新增：顯示總計的專屬區塊 -->
+            <div id="monthlyTotal" style="display:none; font-size: 20px; font-weight: bold; color: #d32f2f; margin: 15px 0; background: #ffebee; padding: 10px; border-radius: 8px;"></div>
+            
+            <table id="recordTable" style="display:none; font-size: 14px;">
+                <!-- 運用 <br> 標籤實現手機版上下層排版 -->
+                <thead><tr><th>日期</th><th>實際<br>(上/下)</th><th>計糧<br>(上/下)</th><th>工時</th></tr></thead>
                 <tbody id="recordBody"></tbody>
             </table>
         </div>
-    </div>
 
     <script>
         // 🚨 這裡填入你 Google Apps Script 部署出來的 /exec 網址 🚨
@@ -216,19 +220,21 @@
             );
         }
 
-        function fetchRecords() {
+function fetchRecords() {
             let cred = getCredentials();
             let msg = document.getElementById("msg-records");
             let btn = document.getElementById("btnRecords");
             let month = document.getElementById("recordMonth").value;
             let table = document.getElementById("recordTable");
             let tbody = document.getElementById("recordBody");
+            let totalDiv = document.getElementById("monthlyTotal"); // 抓取總計顯示區
 
             if (!cred) { msg.className = "msg error"; msg.innerText = "❌ 請先輸入帳號密碼！"; return; }
             if (!month) { msg.className = "msg error"; msg.innerText = "❌ 請選擇月份！"; return; }
 
             btn.disabled = true; btn.innerText = "查詢中..."; msg.innerText = "";
             table.style.display = "none"; tbody.innerHTML = "";
+            totalDiv.style.display = "none"; // 查詢前先隱藏總計
 
             let payload = { action: "getRecords", id: cred.id, pwd: cred.pwd, yearMonth: month };
 
@@ -238,16 +244,24 @@
                     if (res.status === "error") { msg.className = "msg error"; msg.innerText = res.msg; return; }
                     if (res.data.length === 0) { msg.className = "msg error"; msg.innerText = "⚠️ 這個月無紀錄！"; return; }
 
+                    // 將陣列裡的每日資料產生表格 (利用 <br> 將上下班時間疊在一起)
                     res.data.forEach(function(row) {
                         let tr = document.createElement("tr");
-                        tr.innerHTML = `<td>${row.date}</td><td>${row.first}</td><td>${row.last}</td>`;
+                        tr.innerHTML = `<td>${row.date}</td>
+                                        <td><span style="color:#888;">${row.actualIn}</span><br><span style="color:#888;">${row.actualOut}</span></td>
+                                        <td><strong>${row.payIn}</strong><br><strong>${row.payOut}</strong></td>
+                                        <td><strong>${row.hours}</strong></td>`;
                         tbody.appendChild(tr);
                     });
                     table.style.display = "table";
+                    
+                    // 顯示當月總工時
+                    totalDiv.innerHTML = `💰 當月計糧總工時：<br><span style="font-size: 26px;">${res.totalHours} 小時</span>`;
+                    totalDiv.style.display = "block";
                 },
                 function(err) {
                     btn.disabled = false; btn.innerText = "查詢紀錄";
-                    msg.className = "msg error"; msg.innerText = "❌ 系統錯誤。";
+                    msg.className = "msg error"; msg.innerText = "❌ 異常: " + err;
                 }
             );
         }

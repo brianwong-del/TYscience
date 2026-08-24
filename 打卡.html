@@ -76,22 +76,24 @@
             <p id="msg-correction" class="msg"></p>
         </div>
 
-        <!-- 查詢紀錄 -->
+<!-- 查詢紀錄 (包含底部的 468 查詢按鈕) -->
         <div id="tab-records" class="tab-content">
             <div class="form-group"><label>選擇月份：</label><input type="month" id="recordMonth"></div>
             <button id="btnRecords" class="btn-main btn-orange" onclick="fetchRecords()">查詢紀錄</button>
             <p id="msg-records" class="msg"></p>
             
-            <!-- 新增：顯示總計的專屬區塊 -->
             <div id="monthlyTotal" style="display:none; font-size: 20px; font-weight: bold; color: #d32f2f; margin: 15px 0; background: #ffebee; padding: 10px; border-radius: 8px;"></div>
             
             <table id="recordTable" style="display:none; font-size: 14px;">
-                <!-- 運用 <br> 標籤實現手機版上下層排版 -->
                 <thead><tr><th>日期</th><th>實際<br>(上/下)</th><th>計糧<br>(上/下)</th><th>工時</th></tr></thead>
                 <tbody id="recordBody"></tbody>
             </table>
+            
+            <!-- 👇 這是新加在頁面底部的 468 查詢區塊 👇 -->
+            <hr style="margin: 25px 0 15px 0; border: 1px dashed #ccc;">
+            <button id="btnCheck468" class="btn-main" onclick="check468()" style="background-color: #607d8b; color: white;">🔍 查詢過去 4 週進度</button>
+            <div id="msg-468" style="display:none; font-size: 18px; font-weight: bold; margin-top: 15px; padding: 15px; border-radius: 8px; white-space: pre-line;"></div>
         </div>
-
     <script>
         // 🚨 這裡填入你 Google Apps Script 部署出來的 /exec 網址 🚨
         const GAS_API_URL = "https://script.google.com/macros/s/AKfycbx0Ggk4PjZLQsfDgY9HvXvYCj36sBM0-6JejHrnu9ONu6kcsBzKF2KK_9rExHHc0Mkgug/exec";
@@ -265,6 +267,50 @@ function fetchRecords() {
                 }
             );
         }
+        function check468() {
+            let cred = getCredentials();
+            let msgBox = document.getElementById("msg-468");
+            let btn = document.getElementById("btnCheck468");
+
+            if (!cred) { 
+                msgBox.style.display = "block";
+                msgBox.style.background = "#ffebee";
+                msgBox.style.color = "#d32f2f";
+                msgBox.innerText = "❌ 請先輸入上方帳號密碼！"; 
+                return; 
+            }
+
+            btn.disabled = true; btn.innerText = "計算中..."; 
+            msgBox.style.display = "block";
+            msgBox.style.background = "#eef2f3";
+            msgBox.style.color = "#555";
+            msgBox.innerText = "⏳ 正在回溯過去 28 天打卡紀錄...";
+
+            let payload = { action: "check468", id: cred.id, pwd: cred.pwd };
+
+            callGAS(payload, 
+                function(res) {
+                    btn.disabled = false; btn.innerText = "🔍 查詢過去 4 週進度";
+                    if (res.status === "error") { 
+                        msgBox.style.background = "#ffebee";
+                        msgBox.style.color = "#d32f2f";
+                        msgBox.innerText = res.msg; 
+                    } else {
+                        // 依照達標與否，顯示不同顏色的提示框
+                        msgBox.style.background = res.hours >= 68 ? "#e2efda" : "#fff2cc";
+                        msgBox.style.color = res.hours >= 68 ? "#2e7d32" : "#e65100";
+                        msgBox.innerText = res.msg;
+                    }
+                },
+                function(err) {
+                    btn.disabled = false; btn.innerText = "🔍 查詢過去 4 週進度";
+                    msgBox.style.background = "#ffebee";
+                    msgBox.style.color = "#d32f2f";
+                    msgBox.innerText = "❌ 異常: " + err;
+                }
+            );
+        }
+        
     </script>
 </body>
 </html>

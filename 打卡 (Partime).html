@@ -59,6 +59,8 @@
             <button class="tab-btn active" onclick="switchTab('tab-checkin', this)">📍 打卡</button>
             <button class="tab-btn" onclick="switchTab('tab-correction', this)">📝 補卡</button>
             <button class="tab-btn" onclick="switchTab('tab-records', this)">📅 紀錄</button>
+            <!-- 👇 新增這行 👇 -->
+            <button class="tab-btn" onclick="switchTab('tab-leave', this)">🏖️ 請假</button>
         </div>
 
         <!-- 現場打卡 -->
@@ -93,6 +95,45 @@
             <hr style="margin: 25px 0 15px 0; border: 1px dashed #ccc;">
             <button id="btnCheck468" class="btn-main" onclick="check468()" style="background-color: #607d8b; color: white;">🔍 查詢過去 4 週進度</button>
             <div id="msg-468" style="display:none; font-size: 18px; font-weight: bold; margin-top: 15px; padding: 15px; border-radius: 8px; white-space: pre-line;"></div>
+        </div>
+        
+        <!-- 🏖️ 年假系統介面 -->
+        <div id="tab-leave" class="tab-content">
+            <button id="btnFetchLeave" class="btn-main btn-orange" onclick="fetchLeaveInfo()">🔄 查詢我的年假額度</button>
+            
+            <!-- 額度儀表板 -->
+            <div id="leaveDashboard" style="display:none; margin-top:15px; background:#eef2f3; padding:15px; border-radius:10px;">
+                <h3 style="margin-top:0; color:#333;">本年度年假額度</h3>
+                <div style="display:flex; justify-content:space-between; font-size:16px;">
+                    <div>總額度<br><strong id="leaveTotal" style="font-size:22px; color:#1976d2;">0</strong> 天</div>
+                    <div>已使用<br><strong id="leaveUsed" style="font-size:22px; color:#d32f2f;">0</strong> 天</div>
+                    <div>可使用<br><strong id="leaveRemain" style="font-size:22px; color:#388e3c;">0</strong> 天</div>
+                </div>
+            </div>
+
+            <hr style="margin: 20px 0; border: 1px dashed #ccc;">
+
+            <!-- 請假表單 -->
+            <div class="form-group"><label>請假日期：</label><input type="date" id="leaveDate"></div>
+            <div class="form-group"><label>請假時長：</label>
+                <select id="leaveType" style="width: 100%; padding: 12px; margin: 5px 0 10px 0; font-size: 18px; border: 1px solid #ccc; border-radius: 8px;">
+                    <option value="全日">全日 (1天)</option>
+                    <option value="上午">上午 (0.5天)</option>
+                    <option value="下午">下午 (0.5天)</option>
+                </select>
+            </div>
+            <div class="form-group"><label>請假事由：</label><input type="text" id="leaveReason" placeholder="例如：去旅行、處理私事"></div>
+            <button id="btnApplyLeave" class="btn-main btn-blue" onclick="submitLeave()">送出請假單</button>
+            <p id="msg-leave" class="msg"></p>
+
+            <hr style="margin: 20px 0; border: 1px dashed #ccc;">
+            
+            <!-- 申請紀錄表 -->
+            <div style="text-align: left; font-size: 16px; font-weight: bold; color: #444;">📜 我的申請進度</div>
+            <table id="leaveTable" style="display:none; font-size: 14px; margin-top: 10px;">
+                <thead><tr><th>日期</th><th>時長</th><th>狀態</th></tr></thead>
+                <tbody id="leaveBody"></tbody>
+            </table>
         </div>
     <script>
         // 🚨 這裡填入你 Google Apps Script 部署出來的 /exec 網址 🚨
@@ -302,7 +343,83 @@ function fetchRecords() {
                 }
             );
         }
-        
+        function fetchLeaveInfo() {
+            let cred = getCredentials();
+            let msg = document.getElementById("msg-leave");
+            let btn = document.getElementById("btnFetchLeave");
+            
+            if (!cred) { msg.className = "msg error"; msg.innerText = "❌ 請先輸入帳號密碼！"; return; }
+
+            btn.disabled = true; btn.innerText = "讀取中..."; msg.innerText = "";
+            document.getElementById("leaveDashboard").style.display = "none";
+            document.getElementById("leaveTable").style.display = "none";
+
+            let payload = { action: "getLeaveInfo", id: cred.id, pwd: cred.pwd };
+
+            callGAS(payload, 
+                function(res) {
+                    btn.disabled = false; btn.innerText = "🔄 查詢我的年假額度";
+                    if (res.status === "error") { msg.className = "msg error"; msg.innerText = res.msg; return; }
+                    
+                    // 填入額度數字
+                    document.getElementById("leaveTotal").innerText = res.total;
+                    document.getElementById("leaveUsed").innerText = res.used;
+                    document.getElementById("leaveRemain").innerText = res.remain;
+                    document.getElementById("leaveDashboard").style.display = "block";
+
+                    // 畫出歷史審批狀態表
+                    let tbody = document.getElementById("leaveBody");
+                    tbody.innerHTML = "";
+                    if (res.history.length > 0) {
+                        res.history.forEach(function(row) {
+                            let tr = document.createElement("tr");
+                            let statusColor = row.status === "已批准" ? "#2e7d32" : (row.status === "已拒絕" ? "#d32f2f" : "#ff9800");
+                            tr.innerHTML = `<td>${row.date}</td>
+                                            <td>${row.type}</td>
+                                            <td style="color:${statusColor}; font-weight:bold;">${row.status}</td>`;
+                            tbody.appendChild(tr);
+                        });
+                        document.getElementById("leaveTable").style.display = "table";
+                    }
+                },
+                function(err) {
+                    btn.disabled = false; btn.innerText = "🔄 查詢我的年假額度";
+                    msg.className = "msg error"; msg.innerText = "❌ 異常: " + err;
+                }
+            );
+        }
+
+        function submitLeave() {
+            let cred = getCredentials();
+            let msg = document.getElementById("msg-leave");
+            let btn = document.getElementById("btnApplyLeave");
+            let date = document.getElementById("leaveDate").value;
+            let type = document.getElementById("leaveType").value;
+            let reason = document.getElementById("leaveReason").value || "無";
+
+            if (!cred) { msg.className = "msg error"; msg.innerText = "❌ 請先輸入帳號密碼！"; return; }
+            if (!date) { msg.className = "msg error"; msg.innerText = "❌ 請選擇請假日期！"; return; }
+
+            btn.disabled = true; btn.innerText = "傳送中..."; msg.innerText = "⏳ 處理中..."; msg.className = "msg";
+
+            let payload = { action: "applyLeave", id: cred.id, pwd: cred.pwd, leaveDate: date, leaveType: type, reason: reason };
+            
+            callGAS(payload, 
+                function(res) {
+                    msg.innerText = res.msg;
+                    msg.className = res.status === 'success' ? 'msg success' : 'msg error';
+                    btn.disabled = false; btn.innerText = "送出請假單";
+                    if (res.status === 'success') {
+                        fetchLeaveInfo(); // 送出成功後自動重新抓取資料，更新表格與餘額
+                    }
+                }, 
+                function(err) {
+                    msg.className = "msg error"; msg.innerText = "❌ 系統錯誤。";
+                    btn.disabled = false; btn.innerText = "送出請假單";
+                }
+            );
+        }
+
     </script>
 </body>
 </html>
